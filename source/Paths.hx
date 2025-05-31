@@ -509,4 +509,75 @@ class Paths
 		return list;
 	}
 	#end
+
+	public static function loadAnimateAtlas(spr:PsychFlxAnimate, folderOrImg:Dynamic, spriteJson:Dynamic = null, animationJson:Dynamic = null)
+	{
+		var changedAnimJson = false;
+		var changedAtlasJson = false;
+		var changedImage = false;
+		
+		if(spriteJson != null)
+		{
+			changedAtlasJson = true;
+			spriteJson = File.getContent(spriteJson);
+		}
+
+		if(animationJson != null) 
+		{
+			changedAnimJson = true;
+			animationJson = File.getContent(animationJson);
+		}
+
+		var thing = 1;
+		if(Paths.fileExists('images/$folderOrImg/spritemap.png', TEXT))
+			thing = 0;
+		// is folder or image path
+		if(Std.isOfType(folderOrImg, String))
+		{
+			var originalPath:String = folderOrImg;
+
+			for (i in thing...10)
+			{
+				var st:String = '$i';
+				if(i == 0) st = '';
+
+				if(!changedAtlasJson)
+				{
+					trace('images/$originalPath/spritemap$st.json');
+					spriteJson = getTextFromFile('images/$originalPath/spritemap$st.json');
+					if(spriteJson != null)
+					{
+						//trace('found Sprite Json');
+						changedImage = true;
+						changedAtlasJson = true;
+						folderOrImg = Paths.image('$originalPath/spritemap$st');
+						break;
+					}
+				}
+				else if(Paths.fileExists('images/$originalPath/spritemap$st.png', IMAGE))
+				{
+					//trace('found Sprite PNG');
+					changedImage = true;
+					folderOrImg = Paths.image('$originalPath/spritemap$st');
+					break;
+				}
+			}
+
+			if(!changedImage)
+			{
+				trace('Changing folderOrImg to FlxGraphic');
+				changedImage = true;
+				folderOrImg = Paths.image(originalPath);
+			}
+
+			if(!changedAnimJson)
+			{
+				trace('found Animation Json');
+				changedAnimJson = true;
+				animationJson = getTextFromFile('images/$originalPath/Animation.json');
+			}
+		}
+
+		spr.loadAtlasEx(folderOrImg, spriteJson, animationJson);
+	}
 }

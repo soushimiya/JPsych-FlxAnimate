@@ -833,7 +833,17 @@ class CharacterEditorState extends MusicBeatState
 		}
 		var anims:Array<AnimArray> = char.animationsArray.copy();
 		if(Paths.fileExists('images/' + char.imageFile + '/Animation.json', TEXT)) {
-			char.frames = AtlasFrameMaker.construct(char.imageFile);
+			char.atlas = new PsychFlxAnimate();
+			char.atlas.showPivot = false;
+			try
+			{
+				Paths.loadAnimateAtlas(char.atlas, char.imageFile);
+			}
+			catch(e:haxe.Exception)
+			{
+				FlxG.log.warn('Could not load atlas ${char.imageFile}: $e');
+				trace(e.stack);
+			}
 		} else if(Paths.fileExists('images/' + char.imageFile + '.txt', TEXT)) {
 			char.frames = Paths.getPackerAtlas(char.imageFile);
 		} else {

@@ -48,6 +48,7 @@ class Character extends FlxSprite
 {
 	public var animOffsets:Map<String, Array<Dynamic>>;
 	public var debugMode:Bool = false;
+	public var atlas:PsychFlxAnimate;
 
 	public var isPlayer:Bool = false;
 	public var curCharacter:String = DEFAULT_CHARACTER;
@@ -139,18 +140,12 @@ class Character extends FlxSprite
 				{
 					spriteType = "packer";
 				}
-				
-				#if MODS_ALLOWED
-				var modAnimToFind:String = Paths.modFolders('images/' + json.image + '/Animation.json');
+
 				var animToFind:String = Paths.getPath('images/' + json.image + '/Animation.json', TEXT);
+				var modAnimToFind:String = Paths.modFolders('images/' + json.image + '/Animation.json');
+				trace(modAnimToFind);
 				
-				//var modTextureToFind:String = Paths.modFolders("images/"+json.image);
-				//var textureToFind:String = Paths.getPath('images/' + json.image, new AssetType();
-				
-				if (FileSystem.exists(modAnimToFind) || FileSystem.exists(animToFind) || Assets.exists(animToFind))
-				#else
-				if (Assets.exists(Paths.getPath('images/' + json.image + '/Animation.json', TEXT)))
-				#end
+				if (FileSystem.exists(animToFind) || FileSystem.exists(modAnimToFind))
 				{
 					spriteType = "texture";
 				}
@@ -164,7 +159,17 @@ class Character extends FlxSprite
 						frames = Paths.getSparrowAtlas(json.image);
 					
 					case "texture":
-						frames = AtlasFrameMaker.construct(json.image);
+						atlas = new PsychFlxAnimate();
+						atlas.showPivot = false;
+						try
+						{
+							Paths.loadAnimateAtlas(atlas, json.image);
+						}
+						catch(e:haxe.Exception)
+						{
+							FlxG.log.warn('Could not load atlas ${json.image}: $e');
+							trace(e.stack);
+						}
 				}
 				imageFile = json.image;
 
@@ -199,10 +204,19 @@ class Character extends FlxSprite
 						var animFps:Int = anim.fps;
 						var animLoop:Bool = !!anim.loop; //Bruh
 						var animIndices:Array<Int> = anim.indices;
-						if(animIndices != null && animIndices.length > 0) {
-							animation.addByIndices(animAnim, animName, animIndices, "", animFps, animLoop);
-						} else {
-							animation.addByPrefix(animAnim, animName, animFps, animLoop);
+						if(atlas != null)
+						{
+							if(animIndices != null && animIndices.length > 0)
+								atlas.anim.addBySymbolIndices(animAnim, animName, animIndices, animFps, animLoop);
+							else
+								atlas.anim.addBySymbol(animAnim, animName, animFps, animLoop);
+						}
+						else
+						{
+							if(animIndices != null && animIndices.length > 0)
+								animation.addByIndices(animAnim, animName, animIndices, "", animFps, animLoop);
+							else
+								animation.addByPrefix(animAnim, animName, animFps, animLoop);
 						}
 
 						if(anim.offsets != null && anim.offsets.length > 1) {
@@ -223,26 +237,6 @@ class Character extends FlxSprite
 		if (isPlayer)
 		{
 			flipX = !flipX;
-
-			/*// Doesn't flip for BF, since his are already in the right place???
-			if (!curCharacter.startsWith('bf'))
-			{
-				// var animArray
-				if(animation.getByName('singLEFT') != null && animation.getByName('singRIGHT') != null)
-				{
-					var oldRight = animation.getByName('singRIGHT').frames;
-					animation.getByName('singRIGHT').frames = animation.getByName('singLEFT').frames;
-					animation.getByName('singLEFT').frames = oldRight;
-				}
-
-				// IF THEY HAVE MISS ANIMATIONS??
-				if (animation.getByName('singLEFTmiss') != null && animation.getByName('singRIGHTmiss') != null)
-				{
-					var oldMiss = animation.getByName('singRIGHTmiss').frames;
-					animation.getByName('singRIGHTmiss').frames = animation.getByName('singLEFTmiss').frames;
-					animation.getByName('singLEFTmiss').frames = oldMiss;
-				}
-			}*/
 		}
 
 		switch(curCharacter)
@@ -256,6 +250,8 @@ class Character extends FlxSprite
 
 	override function update(elapsed:Float)
 	{
+		if(atlas != null) atlas.update(elapsed);
+
 		if(!debugMode && animation.curAnim != null)
 		{
 			if(heyTimer > 0)
@@ -263,14 +259,14 @@ class Character extends FlxSprite
 				heyTimer -= elapsed * PlayState.instance.playbackRate;
 				if(heyTimer <= 0)
 				{
-					if(specialAnim && animation.curAnim.name == 'hey' || animation.curAnim.name == 'cheer')
+					if(specialAnim && getAnimationName() == 'hey' || getAnimationName() == 'cheer')
 					{
 						specialAnim = false;
 						dance();
 					}
 					heyTimer = 0;
 				}
-			} else if(specialAnim && animation.curAnim.finished)
+			} else if(specialAnim && isAnimationFinished())
 			{
 				specialAnim = false;
 				dance();
@@ -288,12 +284,12 @@ class Character extends FlxSprite
 						playAnim('shoot' + noteData, true);
 						animationNotes.shift();
 					}
-					if(animation.curAnim.finished) playAnim(animation.curAnim.name, false, false, animation.curAnim.frames.length - 3);
+					if(isAnimationFinished()) playAnim(getAnimationName(), false, false, animation.curAnim.frames.length - 3);
 			}
 
 			if (!isPlayer)
 			{
-				if (animation.curAnim.name.startsWith('sing'))
+				if (getAnimationName().startsWith('sing'))
 				{
 					holdTimer += elapsed;
 				}
@@ -305,12 +301,29 @@ class Character extends FlxSprite
 				}
 			}
 
-			if(animation.curAnim.finished && animation.getByName(animation.curAnim.name + '-loop') != null)
+			if(isAnimationFinished() && animation.getByName(getAnimationName() + '-loop') != null)
 			{
-				playAnim(animation.curAnim.name + '-loop');
+				playAnim(getAnimationName() + '-loop');
 			}
 		}
 		super.update(elapsed);
+	}
+
+	inline public function isAnimationNull():Bool
+	{
+		return atlas == null ? (animation.curAnim == null) : (atlas.anim.curInstance == null || atlas.anim.curSymbol == null);
+	}
+
+	var _lastPlayedAnimation:String;
+	inline public function getAnimationName():String
+	{
+		return _lastPlayedAnimation;
+	}
+
+	public function isAnimationFinished():Bool
+	{
+		if(isAnimationNull()) return false;
+		return atlas == null ? animation.curAnim.finished : atlas.anim.finished;
 	}
 
 	public var danced:Bool = false;
@@ -340,7 +353,15 @@ class Character extends FlxSprite
 	public function playAnim(AnimName:String, Force:Bool = false, Reversed:Bool = false, Frame:Int = 0):Void
 	{
 		specialAnim = false;
-		animation.play(AnimName, Force, Reversed, Frame);
+		
+		if(atlas == null)
+			animation.play(AnimName, Force, Reversed, Frame);
+		else
+		{
+			atlas.anim.play(AnimName, Force, Reversed, Frame);
+			atlas.update(0);
+		}
+		_lastPlayedAnimation = AnimName;
 
 		var daOffset = animOffsets.get(AnimName);
 		if (animOffsets.exists(AnimName))
@@ -416,5 +437,44 @@ class Character extends FlxSprite
 	public function quickAnimAdd(name:String, anim:String)
 	{
 		animation.addByPrefix(name, anim, 24, false);
+	}
+
+	public override function draw()
+	{
+		if(atlas != null)
+		{
+			copyAtlasValues();
+			atlas.draw();
+		}
+		super.draw();
+	}
+
+	public function copyAtlasValues()
+	{
+		@:privateAccess
+		{
+			atlas.cameras = cameras;
+			atlas.scrollFactor = scrollFactor;
+			atlas.scale = scale;
+			atlas.offset = offset;
+			atlas.origin = origin;
+			atlas.x = x;
+			atlas.y = y;
+			atlas.angle = angle;
+			atlas.alpha = alpha;
+			atlas.visible = visible;
+			atlas.flipX = flipX;
+			atlas.flipY = flipY;
+			atlas.shader = shader;
+			atlas.antialiasing = antialiasing;
+			atlas.colorTransform = colorTransform;
+			atlas.color = color;
+		}
+	}
+
+	public override function destroy()
+	{
+		atlas = flixel.util.FlxDestroyUtil.destroy(atlas);
+		super.destroy();
 	}
 }
